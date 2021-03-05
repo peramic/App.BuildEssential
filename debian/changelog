@@ -1,0 +1,28 @@
+appbuild-essential (1.2.0-1) unstable; urgency=medium
+
+  * Removes sbuild
+
+ -- HARTING IT_SD <opensource@HARTING.com>  Wed, 17 Feb 2021 09:25:05 +0100
+
+
+appbuild-essential (1.1.0-1) unstable; urgency=medium
+
+  * Adds buster support
+
+ -- HARTING IT_SD <opensource@HARTING.com>  Mon, 09 Dec 2019 16:59:00 +0100
+
+
+appbuild-essential (1.0.1-0) unstable; urgency=medium
+ 
+  * Adds auto update of apt key store while setup
+  * Adds copying of public RSA key
+  * Adds buster
+ 
+ -- HARTING IT_SD <opensource@HARTING.com>  Wed, 16 Oct 2019 11:04:21 +0200
+
+
+appbuild-essential (1.0.0-0) unstable; urgency=medium
+ 
+  * Initialization
+ 
+ -- HARTING IT_SD <opensource@HARTING.com>  Tue, 16 Apr 2019 14:08:40 +0200

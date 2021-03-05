@@ -1,0 +1,8 @@
+Source: appbuild-essential
+Maintainer: HARTING IT_SD <opensource@HARTING.com>
+Build-Depends: debhelper
+
+Package: appbuild-essential
+Architecture: all
+Depends: ${shlibs:Depends}, wget, qemu-user-static
+Description: App build essential

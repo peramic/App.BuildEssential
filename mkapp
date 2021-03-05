@@ -1,0 +1,125 @@
+#!/bin/bash
+
+set -e
+set -x
+
+if [ -z "$IMAGE" ] || [ -z "$PACKAGE" ]; then
+  echo "Missing image or package"
+  exit 1
+fi
+
+BUILD=.
+
+if [ -f pre ]; then
+  echo preparing app
+  ./pre
+fi
+
+export LANG=C
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+
+export TARGET=rfs
+
+if [ -d "$TARGET" ]; then
+  chown root.root -R "$TARGET"
+else
+  mkdir "$TARGET"
+fi
+
+echo fetching image "$IMAGE"
+wget -nv $IMAGE -O - | tar xfz - --skip-old-files -C "$TARGET"
+if [ $? != 0 ]; then
+  echo "Missing or corrupt image"
+  exit 1
+fi
+
+echo preparing root [armhf]
+mv "$TARGET/usr/bin/deb-systemd-helper" "$TARGET/usr/bin/deb-systemd-helper.REAL"
+touch "$TARGET/usr/bin/deb-systemd-helper"
+chmod 755 "$TARGET/usr/bin/deb-systemd-helper"
+
+mv "$TARGET/sbin/start-stop-daemon" "$TARGET/sbin/start-stop-daemon.REAL"
+touch "$TARGET/sbin/start-stop-daemon"
+chmod 755 "$TARGET/sbin/start-stop-daemon"
+
+cp /usr/bin/qemu-arm-static "$TARGET/usr/bin/"
+cat << EOF | chroot "$TARGET" /bin/bash
+set -e
+set -x
+echo root [armhf] changed
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs udev /dev
+mount -t devpts devpts /dev/pts
+
+echo preparing root [armhf]
+echo "deb [trusted=yes] $APT ${DIST%%-*} main" > /etc/apt/sources.list.d/local.list
+if [[ "${DIST##*-}" == "updates" ]] || [[ "${DIST##*-}" == "staging" ]]; then
+  echo "deb [trusted=yes] $APT $DIST main" >> /etc/apt/sources.list.d/local.list
+fi
+
+echo fetching package list
+apt-get -q -oAcquire::https::Verify-Peer=false update
+echo installing package "$PACKAGE"
+apt-get -q -oAcquire::https::Verify-Peer=false -oAPT::Get::Assume-Yes=true -oDpkg::Options::="--force-confold" install --install-recommends $PACKAGE
+
+echo cleaning root [armhf]
+apt-get -q clean
+rm -rf /var/lib/apt/lists/*
+rm /etc/apt/sources.list.d/local.list
+
+echo setting meta info
+VERSION="\$(dpkg -s $PACKAGE | grep '^Version: ' | sed -e 's/[^:]*: *//' | head -n 1 | sed 's/\([^-+~]*\).*/\1/')"
+echo "Version: \$VERSION"
+cat > META/about.json <<EOFF
+{
+  "interface_version": "2.0.0",
+  "version": "\$VERSION",
+  "container": "$PACKAGE",
+  "support": "$SUPPORT",
+  "maintainer": "$MAINTAINER",
+  "build_date": "\$(date -u)"
+}
+EOFF
+cat META/about.json
+
+echo finishing chroot [armhf]
+umount /dev/pts /dev /sys /proc
+EOF
+
+echo cleaning root [armhf]
+mv "$TARGET/sbin/start-stop-daemon.REAL" "$TARGET/sbin/start-stop-daemon"
+mv "$TARGET/usr/bin/deb-systemd-helper.REAL" "$TARGET/usr/bin/deb-systemd-helper"
+rm "$TARGET/usr/bin/qemu-arm-static"
+
+if [ -f post ]; then
+  echo customizing app
+  ./post
+fi
+
+tar cfz "app.tar.gz" -C "$TARGET" .
+
+rm -rf "$TARGET"
+
+if [ -f "app.tar.gz" ]; then
+  cat > "script.json" <<EOF
+[
+  [
+    "upload",
+    "app.tar.gz"
+  ],
+  [
+    "install_container",
+    [
+      "*",
+      "app.tar.gz"
+    ]
+  ]
+]
+EOF
+  VERSION=$(tar xf $BUILD/app.tar.gz -O ./META/about.json | grep '"version": ' | cut -d '"' -f4 | head -n 1)
+  tar cf ${PACKAGE}_${VERSION}.tar -C $BUILD app.tar.gz script.json
+  echo '::set-output name=IMAGE::'${PACKAGE}_${VERSION}.tar
+  echo '::set-output name=VERSION::'${VERSION}
+fi

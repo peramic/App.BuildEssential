@@ -1,0 +1,23 @@
+name: Publish package
+
+on:
+  workflow_dispatch:
+    inputs:
+      dist:
+        description: 'Distribution'
+        default: 'stretch'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v2
+      - name: Build
+        uses: peramic/actions/build-stretch@v1
+        with:
+          arch: all
+          dist: ${{ github.event.inputs.dist }}
+          script: ./mkpkg
+          token: ${{ secrets.ACTIONS }}
